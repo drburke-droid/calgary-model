@@ -9,7 +9,15 @@ import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const $ = (id) => document.getElementById(id);
-const DATA = new URL('data/', import.meta.url).href;
+// model data lives in data/ next to this file; if the files were uploaded flat (e.g. dragged into a GitHub repo
+// without their folder), use the folder this file is in instead
+const DATA = await (async () => {
+  const sub = new URL('data/', import.meta.url).href, flat = new URL('./', import.meta.url).href;
+  if (window.__B64DATA) return sub;
+  try { const r = await fetch(sub + 'meta.json', { method: 'HEAD', cache: 'no-store' }); if (r.ok) return sub; } catch (e) { }
+  try { const r = await fetch(flat + 'meta.json', { method: 'HEAD', cache: 'no-store' }); if (r.ok) return flat; } catch (e) { }
+  return sub;
+})();
 const FILES = 17; let nLoaded = 0;
 function tick(msg) { nLoaded++; $('lbar').style.width = Math.min(100, (100 * nLoaded) / FILES) + '%'; $('lmsg').textContent = msg; }
 async function getBin(name) {   // binary model data (or base64 text where the host serves only text types)
