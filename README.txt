@@ -28,5 +28,14 @@ Credits that must stay visible: City of Calgary Open Data; road geometry (c) Ope
 Calgary Vision Centre
 ---------------------
 The Calgary Vision Centre line under the year (index.html, id "cvcLink"), the teal pin on Gulf Canada Square
-(shown from 1998 on) and the text of its card (app.js, CVC_SUB) can be edited in those two files. The pin's
+(shown in every year: before 1998 it is a hollow ring naming what stood on the block then - the Robin Hood flour
+mill, the cleared site, Gulf Canada Square - as the 'future home'; the texts are in app.js, CVC_ERAS) and the text of its card (app.js, CVC_SUB) can be edited in those two files. The pin's
 position comes from data/meta.json ("cvc"). Clicking the line or the pin flies the view to the clinic in 2026.
+
+Address options
+---------------
+  ?find      opens in 2026 and flies straight to Calgary Vision Centre with its card (and a Get directions link) open
+  ?year=1950 starts the model in that year (1900-2026)
+  ?simple    turns off the film-style effects
+e.g. <iframe src="https://drburke-droid.github.io/calgary-model/?find" ...>
+The data files may sit in data/ (as shipped) or loose next to app.js; the app finds them either way.

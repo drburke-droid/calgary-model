@@ -427,12 +427,39 @@ const pins = stops.map((s, i) => {
   b.addEventListener('click', () => goStop(i)); stopsEl.appendChild(b);
   const p = document.createElement('div'); p.className = 'pin' + (isC ? ' cvc' : '');
   p.innerHTML = isC ? '<i></i><b>Calgary Vision Centre<small>At the centre of the city since 1998</small></b>' : `<i></i><b>${s.title.replace(/ · .*$/, '')}</b>`; p.style.display = 'none';
-  p.addEventListener('click', () => goStop(i)); pinsEl.appendChild(p);
+  p.addEventListener('click', () => (isC ? goStop(i, 2.0, year < 1998) : goStop(i))); pinsEl.appendChild(p);
   const ay = isC && CVC ? CVC.ground + CVC.top + 0.012 : s.ground + (s.ah * 1.0) / 1000;
   const pos = isC && CVC ? new THREE.Vector3(CVC.anchor[0], ay, CVC.anchor[1]) : new THREE.Vector3(s.anchor[0], ay, s.anchor[1]);
-  return { el: p, chip: b, pos, y0: isC ? 1998 : builtYear(s), y1: UNTIL[s.key] || 1e4, w: isC ? 236 : s.title.replace(/ · .*$/, '').length * 7.4, sel: false, cvc: isC };
+  return { el: p, chip: b, pos, y0: isC ? 0 : builtYear(s), y1: UNTIL[s.key] || 1e4, w: isC ? 236 : s.title.replace(/ · .*$/, '').length * 7.4, sel: false, cvc: isC };
 });
 const cvcI = pins.findIndex((p) => p.cvc);
+// the clinic's block (9th Avenue & 4th Street SW) through time: the pin and its card say what stood here in each era
+// [from year, pin title, pin subtitle, card title, card text]
+const CVC_ERAS = [
+  [0, 'Future home of Calgary Vision Centre', 'Beside the CPR main line', 'Future home of Calgary Vision Centre',
+    'In the early 1900s this corner of 9th Avenue and 4th Street SW sat beside the CPR main line at the west end of the young town. Calgary Vision Centre opens here, on the +15 level of Gulf Canada Square, in 1998.'],
+  [1910, 'Robin Hood flour mill', 'Future home of Calgary Vision Centre', 'Robin Hood flour mill · c. 1910–1969',
+    'From about 1910 the Robin Hood Flour Mills plant stood here beside the CPR main line. By the 1940s it could mill 2,000 barrels of flour a day and store a million bushels of grain. Calgary Vision Centre opens on this spot in 1998.'],
+  [1969, 'Robin Hood mill · closed 1969', 'Future home of Calgary Vision Centre', 'Robin Hood flour mill · closed 1969',
+    'The mill shut down in 1969, and in 1971 the property was given to the City of Calgary. It was demolished in 1973. Calgary Vision Centre opens on this spot in 1998.'],
+  [1973, 'Mill site cleared · 1973', 'Future home of Calgary Vision Centre', 'Robin Hood mill demolished · 1973',
+    'The old mill came down in 1973 to make way for Gulf Canada Square, which opened here in 1979. Calgary Vision Centre opens on its +15 level in 1998.'],
+  [1979, 'Gulf Canada Square · 1979', 'Future home of Calgary Vision Centre', 'Gulf Canada Square · 1979',
+    'Gulf Canada Square opened on the old mill site in 1979, linked to downtown\'s +15 walkway network. Calgary Vision Centre opens here, on the +15 level, in 1998.'],
+  [1998, 'Calgary Vision Centre', 'At the centre of the city since 1998', 'Calgary Vision Centre · since 1998', CVC_SUB],
+];
+const cvcEraAt = (y) => { let k = 0; for (let i = 0; i < CVC_ERAS.length; i++) if (y >= CVC_ERAS[i][0]) k = i; return k; };
+{ const st = document.createElement('style');   // before 1998 the clinic pin is a hollow, dashed 'future home' marker
+  st.textContent = '.pin.cvc.past i { background: var(--panel-solid); border: 4px solid var(--cvc); box-shadow: 0 2px 6px rgba(0,0,0,0.45); animation: none; } .pin.cvc.past b { border-style: dashed; } #card .t { padding-right: 30px; }';
+  document.head.appendChild(st); }
+let cvcEraI = -1;
+function cvcCard(k) { const e = CVC_ERAS[k]; $('cardT').textContent = e[3]; $('cardS').textContent = e[4]; }
+function updCvcEra(y) {
+  if (cvcI < 0) return; const k = cvcEraAt(y); if (k === cvcEraI) return; cvcEraI = k;
+  const e = CVC_ERAS[k], p = pins[cvcI]; p.el.innerHTML = `<i></i><b>${e[1]}<small>${e[2]}</small></b>`;
+  p.el.classList.toggle('past', k < CVC_ERAS.length - 1); p.w = Math.max(e[1].length * 8.8, e[2].length * 6.4) + 24;
+  if (pins[cvcI].sel && $('card').style.display === 'block' && !(typeof flight !== 'undefined' && flight && flight.y1 != null)) cvcCard(k);
+}
 
 // ---------------------------------------------------------------- street labels (major roads by zoom, hidden behind towers)
 const SN = streets.names, SP = streets.prio, SA = streets.a;
@@ -508,7 +535,7 @@ function setYear(y, fromUser = false) {
   const prev = year; year = Math.min(2026, Math.max(Y0, y));
   if (year > prev + 1e-6 && performance.now() - lastChange > 900) glowStart = prev;
   if (Math.abs(year - prev) > 1e-6) lastChange = performance.now();
-  U.uYear.value = year; slider.value = year; slider.style.setProperty('--p', ((year - Y0) / (2026 - Y0)) * 100 + '%');
+  updCvcEra(year); U.uYear.value = year; slider.value = year; slider.style.setProperty('--p', ((year - Y0) / (2026 - Y0)) * 100 + '%');
   $('yearTxt').textContent = Math.floor(year + 1e-6); $('eraTxt').textContent = chapterOf(year);
   const [pop, last] = population(year); $('popTxt').textContent = `Population ${pop.toLocaleString('en-CA')}${last ? ' (City estimate)' : ''}`;
   for (const m of marks) {
@@ -545,11 +572,34 @@ function flyTo(to, dur = 1.8, yearTo = null) {
   const from = camState(); let daz = to.az - from.az; daz = ((daz + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
   flight = { from, to: { ...to, az: from.az + daz }, t0: performance.now(), dur: dur * 1000, y0: year, y1: yearTo };
 }
-function goStop(i) {
+let dirA = null;   // 'Get directions' link, shown on the Calgary Vision Centre card only
+function dirLink(show) {
+  if (!dirA) {
+    dirA = document.createElement('a'); dirA.target = '_blank'; dirA.rel = 'noopener'; dirA.textContent = 'Get directions \u2197';
+    dirA.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent('Calgary Vision Centre, 401 9 Ave SW, Calgary, AB');
+    dirA.style.cssText = 'display:inline-block;margin-top:10px;font-weight:700;font-size:14px;color:var(--cvc-ink);text-decoration:none;border-bottom:1.5px solid currentColor';
+    $('card').appendChild(dirA);
+  }
+  dirA.style.display = show ? 'inline-block' : 'none';
+}
+let todayA = null;   // 'See it today' link on the clinic card when it was opened in an earlier year
+function todayLink(show) {
+  if (!todayA) {
+    todayA = document.createElement('button'); todayA.type = 'button'; todayA.textContent = 'See it today \u2192';
+    todayA.style.cssText = 'display:inline-block;margin:10px 0 0 16px;padding:0;background:none;border:0;border-bottom:1.5px solid currentColor;font:inherit;font-weight:700;font-size:14px;color:var(--cvc-ink);cursor:pointer';
+    todayA.addEventListener('click', () => goStop(cvcI)); $('card').appendChild(todayA);
+  }
+  todayA.style.display = show ? 'inline-block' : 'none';
+}
+function goStop(i, dur = 2.0, keepYear = false) {
   const s = stops[i], c = s.cam; setPlaying(false);
-  flyTo({ tx: c.tx, ty: c.ty, tz: c.tz, d: c.d * 1.15, el: THREE.MathUtils.degToRad(c.el), az: THREE.MathUtils.degToRad(c.az) }, 2.0, s.year);
+  // on narrow screens the info card covers the lower half: aim a little in front of the stop so it sits higher in the view
+  // (and step back a little, since a tall narrow view shows less of the city around it)
+  const az = THREE.MathUtils.degToRad(c.az), nar = innerWidth < 700, d = c.d * 1.15 * (nar ? 1.45 : 1), sh = nar ? d * 0.3 : 0;
+  flyTo({ tx: c.tx + Math.sin(az) * sh, ty: c.ty, tz: c.tz - Math.cos(az) * sh, d, el: THREE.MathUtils.degToRad(c.el), az }, dur, keepYear ? null : s.year);
   $('cardT').textContent = s.key === 'cvc' ? 'Calgary Vision Centre · since 1998' : s.title; $('cardS').textContent = s.key === 'cvc' ? CVC_SUB : s.sub; $('card').style.display = 'block';
-  $('card').classList.toggle('cvc', s.key === 'cvc');
+  $('card').classList.toggle('cvc', s.key === 'cvc'); dirLink(s.key === 'cvc'); todayLink(s.key === 'cvc' && keepYear);
+  if (s.key === 'cvc') cvcCard(keepYear ? cvcEraAt(year) : CVC_ERAS.length - 1);
   for (const p of pins) { p.chip.removeAttribute('aria-current'); p.sel = false; } pins[i].chip.setAttribute('aria-current', 'true'); pins[i].sel = true;
   if (innerWidth < 1200) { $('tour').classList.remove('open'); $('tourBtn').setAttribute('aria-pressed', 'false'); }
 }
@@ -692,8 +742,12 @@ const START = stops[0].cam;
 const START_VIEW = { tx: 1.25, ty: START.ty, tz: -4.45, d: 2.6, el: THREE.MathUtils.degToRad(36), az: THREE.MathUtils.degToRad(205) };
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 applyCam(reduceMotion ? START_VIEW : { ...HOME, d: 62, el: THREE.MathUtils.degToRad(40), az: THREE.MathUtils.degToRad(212) });
-controls.update(); applyTheme(); resize(); setYear(Y0);
-if (!reduceMotion) setTimeout(() => { if (!flight) flyTo(START_VIEW, 3.4); }, 1300);
+// address options for embedding: ?find (or ?clinic) opens in 2026 and flies down to Calgary Vision Centre with its card open;
+// ?year=1950 starts in that year
+const QP = new URLSearchParams(location.search); const FIND = (QP.has('find') || QP.has('clinic')) && cvcI >= 0; const QY = parseFloat(QP.get('year'));
+controls.update(); applyTheme(); resize(); setYear(FIND ? 2026 : QY >= 1900 && QY <= 2026 ? QY : Y0);
+if (FIND) setTimeout(() => { if (!flight) goStop(cvcI, reduceMotion ? 0.01 : 4.2); }, reduceMotion ? 0 : 900);
+else if (!reduceMotion) setTimeout(() => { if (!flight) flyTo(START_VIEW, 3.4); }, 1300);
 let last = performance.now(), labelTick = 0;
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
