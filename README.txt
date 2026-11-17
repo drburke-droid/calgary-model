@@ -39,9 +39,5 @@ Address options
   ?simple    turns off the film-style effects
   ?bg=f7f5f0 background colour behind the table (hex, default white ffffff) - match it to your page
   ?notable   the older look: the model floating on a coloured backdrop, no table
-  ?diorama   ambient embed: just the table top seen low against the background, no panels; a brass plaque on the
-             table edge plays the time-lapse, which also starts by itself when the embed scrolls into view.
-             The model only takes scroll/drag after a click on it ('Done exploring' or moving the mouse away hands
-             the page back), so it never traps page scrolling. Combine with ?bg=rrggbb to match the page.
 e.g. <iframe src="https://drburke-droid.github.io/calgary-model/?find" ...>
 The data files may sit in data/ (as shipped) or loose next to app.js; the app finds them either way.
