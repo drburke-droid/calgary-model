@@ -851,29 +851,15 @@ window.__model = { stops, setYear, flyTo, goStop, camState, applyCam, controls, 
 
 // ---------------------------------------------------------------- ?diorama: ambient embed
 let engaged = !DIORAMA, lastAct = 0, awayFromHome = false;
-function dioramaView() {   // 3/4 view fitted and centred so the four table corners nearly touch the frame edges
-  const el = THREE.MathUtils.degToRad(22), az = THREE.MathUtils.degToRad(213), ty0 = TBL.yTop + 0.5;
-  const pts = [];
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    for (const y of [TBL.yTop - TBL.TT, TBL.yTop]) pts.push(new THREE.Vector3(sx * TBL.TW / 2, y, sz * TBL.TD / 2));
-    pts.push(new THREE.Vector3(sx * (TBL.TW / 2 - 5), TBL.yTop + 2.2, sz * (TBL.TD / 2 - 5)));   // model corners and relief
-  }
-  camera.fov = 24; camera.aspect = innerWidth / Math.max(1, innerHeight); camera.updateProjectionMatrix();   // a longer lens: less looming near corner
-  const rx = -Math.cos(az), rz = -Math.sin(az);   // screen-right, on the ground
-  let d = 160, h = 0, m = 0, v = null; const q = new THREE.Vector3();
-  for (let it = 0; it < 120; it++) {
-    v = { tx: m * rx, ty: ty0 + h, tz: m * rz, d, el, az }; applyCam(v); camera.updateMatrixWorld();
-    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, behind = false;
-    for (const p of pts) {
-      q.copy(p).applyMatrix4(camera.matrixWorldInverse); if (q.z > -1) { behind = true; break; }
-      q.copy(p).project(camera); x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y);
-    }
-    if (behind) { d *= 1.3; continue; }
-    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2 + 0.01;
-    const need = Math.max((x1 - x0) / 2 / 0.965, (y1 - y0) / 2 / 0.93);
-    if (Math.abs(need - 1) < 0.002 && Math.abs(cx) < 0.003 && Math.abs(cy) < 0.003) break;
-    const s_ = d * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));   // world size of one NDC unit at the target, vertically
-    h += cy * s_ * 0.5; m += cx * s_ * camera.aspect * 0.5; d *= Math.pow(need, 0.7);
+function dioramaView() {   // low 3/4 view fitted so all four table corners just fit in the frame
+  const el = THREE.MathUtils.degToRad(13.5), az = THREE.MathUtils.degToRad(213), ty = TBL.yTop + 0.5;
+  const pts = []; for (const sx of [-1, 1]) for (const sz of [-1, 1]) for (const y of [TBL.yTop - TBL.TT, TBL.yTop + 2.4]) pts.push(new THREE.Vector3(sx * TBL.TW / 2, y, sz * TBL.TD / 2));
+  camera.aspect = innerWidth / Math.max(1, innerHeight); camera.updateProjectionMatrix();
+  let d = 90, v = null;
+  for (let it = 0; it < 40; it++) {
+    v = { tx: 0, ty, tz: 0, d, el, az }; applyCam(v); camera.updateMatrixWorld();
+    let mx = 0, top = -1, bot = 1; for (const p of pts) { const q = p.clone().project(camera); mx = Math.max(mx, Math.abs(q.x)); top = Math.max(top, q.y); bot = Math.min(bot, q.y); }
+    const need = Math.max(mx / 0.95, top / 0.9, -bot / 0.78); if (Math.abs(need - 1) < 0.002) break; d *= Math.pow(need, 0.85);
   }
   return v;
 }
