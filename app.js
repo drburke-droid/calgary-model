@@ -64,6 +64,10 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, lowPower ? 1.5 : 2));
 const POST = renderer.capabilities.isWebGL2 && !/[?&]simple\b/.test(location.search);
 // the model on a wooden table, seen against a plain background (white unless ?bg=rrggbb); ?notable gives the old floating model
 const TABLE = !/[?&]notable\b/.test(location.search);
+// ?diorama: ambient embed - just the table top seen low against the plain background, no interface but a brass play plaque;
+// the city grows by itself when it scrolls into view, and the model only takes the mouse/touch after a click on it
+const DIORAMA = TABLE && /[?&]diorama\b/.test(location.search);
+var TBL = null;   // table top size, set by addTable
 const BGC = TABLE ? '#' + ((/[?&]bg=([0-9a-fA-F]{6})\b/.exec(location.search) || [0, 'ffffff'])[1]) : null;
 if (BGC) document.documentElement.style.setProperty('--bg', BGC);   // WebGL2: post-processed miniature look; else plain ACES
 renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = POST ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
@@ -180,6 +184,8 @@ function addTable(yTop, W, H) {
   const sideMat = new THREE.MeshStandardMaterial({ map: woodTexture(512, 128, base, 0.5), roughness: 0.55, metalness: 0.0 });
   const legMat = new THREE.MeshStandardMaterial({ map: woodTexture(128, 512, base.map((v) => v * 0.95), 0.0), roughness: 0.55, metalness: 0.0 });
   const top = new THREE.Mesh(new THREE.BoxGeometry(TW_, TT, TD_), [sideMat, sideMat, topMat, topMat, sideMat, sideMat]); top.position.set(0, yTop - TT / 2, 0); scene.add(top);
+  TBL = { yTop, TT, TW: TW_, TD: TD_ };
+  if (DIORAMA) return;   // the diorama embed shows the table top only
   for (const [x, z, w, d] of [[0, TD_ / 2 - IN, TW_ - 2 * IN, 0.9], [0, -(TD_ / 2 - IN), TW_ - 2 * IN, 0.9], [TW_ / 2 - IN, 0, 0.9, TD_ - 2 * IN], [-(TW_ / 2 - IN), 0, 0.9, TD_ - 2 * IN]]) {
     const ap = new THREE.Mesh(new THREE.BoxGeometry(w, AP, d), sideMat); ap.position.set(x, yTop - TT - AP / 2, z); scene.add(ap);
   }
@@ -833,7 +839,7 @@ function frame(now) {
     const sc = sun.shadow.camera; sc.left = -sd; sc.right = sd; sc.top = sd; sc.bottom = -sd; sc.near = 0.1; sc.far = Math.max(30, dist * 6); sc.updateProjectionMatrix();
     sun.shadow.bias = -0.00002 * sd; sun.shadow.normalBias = 0.0;
     camera.near = Math.max(0.004, dist * 0.02); camera.far = Math.max(60, dist * 12); camera.updateProjectionMatrix();
-    renderScene(dist); dirty = false;
+    renderScene(dist); dirty = false; if (DIORAMA) placePlaque();
     if (++labelTick % 2 === 0 || !moved) updateLabels(innerWidth, innerHeight);
   }
   requestAnimationFrame(frame);
@@ -842,3 +848,95 @@ requestAnimationFrame(frame);
 $('loading').style.opacity = '0'; setTimeout(() => $('loading').remove(), 700);
 setTimeout(() => ($('hint').style.opacity = '0'), 7000);
 window.__model = { stops, setYear, flyTo, goStop, camState, applyCam, controls, camera, renderer, scene, U, LOOK, gtao, mini, sun, redraw: () => (dirty = true) };
+
+// ---------------------------------------------------------------- ?diorama: ambient embed
+let engaged = !DIORAMA, lastAct = 0, awayFromHome = false;
+function dioramaView() {   // low 3/4 view fitted so all four table corners just fit in the frame
+  const el = THREE.MathUtils.degToRad(13.5), az = THREE.MathUtils.degToRad(213), ty = TBL.yTop + 0.5;
+  const pts = []; for (const sx of [-1, 1]) for (const sz of [-1, 1]) for (const y of [TBL.yTop - TBL.TT, TBL.yTop + 2.4]) pts.push(new THREE.Vector3(sx * TBL.TW / 2, y, sz * TBL.TD / 2));
+  camera.aspect = innerWidth / Math.max(1, innerHeight); camera.updateProjectionMatrix();
+  let d = 90, v = null;
+  for (let it = 0; it < 40; it++) {
+    v = { tx: 0, ty, tz: 0, d, el, az }; applyCam(v); camera.updateMatrixWorld();
+    let mx = 0, top = -1, bot = 1; for (const p of pts) { const q = p.clone().project(camera); mx = Math.max(mx, Math.abs(q.x)); top = Math.max(top, q.y); bot = Math.min(bot, q.y); }
+    const need = Math.max(mx / 0.95, top / 0.9, -bot / 0.78); if (Math.abs(need - 1) < 0.002) break; d *= Math.pow(need, 0.85);
+  }
+  return v;
+}
+function placePlaque() {
+  const pl = $('plaque'); if (!pl || !TBL) return;
+  // the table edge that faces the camera (outward normal most toward it), label centred on its face
+  const cx = camera.position.x, cz = camera.position.z, hx = TBL.TW / 2, hz = TBL.TD / 2, y = TBL.yTop - TBL.TT * 0.5;
+  const edges = [[0, hz, 1, 0, cz - hz], [0, -hz, 1, 0, -cz - hz], [hx, 0, 0, 1, cx - hx], [-hx, 0, 0, 1, -cx - hx]];
+  const e = edges.reduce((a, b) => (b[4] > a[4] ? b : a));
+  const L = (e[2] ? hx : hz) * 0.5, m = new THREE.Vector3(e[0], y, e[1]).project(camera);
+  const a = new THREE.Vector3(e[0] - e[2] * L, y, e[1] - e[3] * L).project(camera), b = new THREE.Vector3(e[0] + e[2] * L, y, e[1] + e[3] * L).project(camera);
+  if (m.z > 1 || Math.abs(m.x) > 1.05 || Math.abs(m.y) > 1.05) { pl.style.visibility = 'hidden'; return; }
+  const W = innerWidth, H = innerHeight; let ang = Math.atan2(-(b.y - a.y) * H, (b.x - a.x) * W);
+  if (ang > Math.PI / 2) ang -= Math.PI; if (ang < -Math.PI / 2) ang += Math.PI;
+  pl.style.visibility = 'visible';
+  pl.style.transform = `translate(${(m.x * 0.5 + 0.5) * W}px, ${(-m.y * 0.5 + 0.5) * H + 9}px) translate(-50%, -50%) rotate(${ang}rad)`;
+  const yr = String(Math.floor(year + 1e-6)); if (pl.dataset.y !== yr) { pl.dataset.y = yr; $('plaqueY').textContent = yr; }
+  const st = playing ? 'pause' : year >= 2025.9 ? 'replay' : 'play'; if (pl.dataset.s !== st) { pl.dataset.s = st;
+    $('plaqueI').innerHTML = st === 'pause' ? '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>' : st === 'replay' ? '<path d="M12 5a7 7 0 1 1-6.6 4.7l1.9.6A5 5 0 1 0 12 7v3L7.5 6 12 2z"/>' : '<path d="M8 5v14l11-7z"/>';
+    pl.setAttribute('aria-label', st === 'pause' ? 'Pause' : st === 'replay' ? 'Watch Calgary grow again' : 'Watch Calgary grow'); }
+}
+function poke() { lastAct = performance.now(); }
+function engage() {
+  if (engaged) return; engaged = true; awayFromHome = true; controls.enabled = true; canvas.style.touchAction = 'none'; canvas.style.cursor = 'grab'; canvas.title = '';
+  slOn = true; document.body.classList.add('engaged'); poke(); dirty = true;
+}
+function disengage(back) {
+  engaged = false; controls.enabled = false; canvas.style.touchAction = 'pan-y'; canvas.style.cursor = 'pointer'; canvas.title = 'Click to explore the model';
+  slOn = false; document.body.classList.remove('engaged'); $('card').style.display = 'none';
+  if (back) { flyTo(dioramaView(), 1.8); awayFromHome = false; } dirty = true;
+}
+if (DIORAMA) {
+  document.body.classList.add('diorama');
+  const st = document.createElement('style');
+  st.textContent = `
+    body.diorama #hud, body.diorama #tools, body.diorama #tour, body.diorama #bar, body.diorama #hint, body.diorama:not(.engaged) #card { display: none !important; }
+    body.diorama #credits { bottom: calc(6px + env(safe-area-inset-bottom, 0px)); right: 10px; font-size: 9.5px; opacity: 0.5; }
+    body.diorama #credits:hover { opacity: 0.9; }
+    body.diorama #card { bottom: 44px; }
+    #plaque { position: absolute; left: 0; top: 0; z-index: 3; display: flex; align-items: center; gap: 7px; padding: 3px 10px 3px 8px; cursor: pointer;
+      font: 700 10.5px/1.3 'Overpass', system-ui, sans-serif; letter-spacing: 0.14em; color: #3a2a10; white-space: nowrap; border: 1px solid #8c6b2e; border-radius: 3px;
+      background: linear-gradient(180deg, #f6e8bd 0%, #d8b86a 48%, #b8923f 100%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 1px 2px rgba(60, 40, 10, 0.35);
+      opacity: 0.93; transition: opacity 0.2s, filter 0.2s; visibility: hidden; }
+    #plaque:hover { opacity: 1; filter: brightness(1.06); }
+    #plaque:focus-visible { outline: 2px solid #8c6b2e; outline-offset: 2px; }
+    #plaque svg { width: 11px; height: 11px; fill: currentColor; flex: none; }
+    #plaque b { font-family: 'Overpass Mono', ui-monospace, monospace; font-weight: 700; letter-spacing: 0.06em; }
+    #done { position: absolute; right: 12px; top: 12px; z-index: 4; display: none; padding: 6px 12px; font: 600 12px 'Overpass', system-ui, sans-serif; color: var(--ink-2);
+      background: rgba(255, 255, 255, 0.86); border: 1px solid rgba(0, 0, 0, 0.12); border-radius: 999px; cursor: pointer; }
+    body.engaged #done { display: block; }
+    @media (max-width: 560px) { #plaque { font-size: 8.5px; padding: 2px 7px 2px 6px; gap: 5px; } #plaque svg { width: 9px; height: 9px; }
+      body.diorama .pin.cvc b { font-size: 11px; padding: 3px 7px 4px; } body.diorama .pin.cvc small { font-size: 8.5px; } body.diorama .pin.cvc i { width: 14px; height: 14px; } }`;
+  document.head.appendChild(st);
+  const pl = document.createElement('button'); pl.id = 'plaque'; pl.type = 'button';
+  pl.innerHTML = '<svg id="plaqueI" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><span>CALGARY</span><b id="plaqueY">1900</b>';
+  pl.addEventListener('click', () => { if (playing) setPlaying(false); else { if (year >= 2025.9) setYear(Y0); setPlaying(true); } dirty = true; });
+  $('app').appendChild(pl);
+  const dn = document.createElement('button'); dn.id = 'done'; dn.type = 'button'; dn.textContent = 'Done exploring ✕';
+  dn.addEventListener('click', () => disengage(true)); $('app').appendChild(dn);
+  speed = 2.6;   // a slower, ambient time-lapse (about 50 seconds from 1900 to today)
+  disengage(false); applyCam(dioramaView()); controls.update();
+  canvas.addEventListener('pointerdown', () => { engage(); poke(); });
+  $('labels').addEventListener('pointerdown', () => engage(), true);
+  ['wheel', 'pointermove', 'keydown'].forEach((ev) => canvas.addEventListener(ev, () => { if (engaged) poke(); }, { passive: true }));
+  document.documentElement.addEventListener('mouseleave', () => { if (engaged) disengage(false); });   // the mouse left the embed (not just onto a pin)
+  setInterval(() => {   // left alone for a while: hand the page back and glide home
+    const idle = performance.now() - lastAct;
+    if (engaged && idle > 25000) disengage(true);
+    else if (!engaged && awayFromHome && idle > 12000 && !flight) { flyTo(dioramaView(), 2.2); awayFromHome = false; }
+  }, 1000);
+  addEventListener('resize', () => { if (!engaged && !awayFromHome) applyCam(dioramaView()); });
+  // grow the city when the embed scrolls into view (pause while it is off screen)
+  let started = false, resume = false;
+  new IntersectionObserver((es) => {
+    const vis = es[es.length - 1].intersectionRatio >= 0.35;
+    if (vis && !started) { started = true; setTimeout(() => { if (!playing && year < 1901.5) { setYear(Y0); setPlaying(true); } }, 900); }
+    else if (!vis && playing) { setPlaying(false); resume = true; }
+    else if (vis && resume) { resume = false; setPlaying(true); }
+  }, { threshold: [0, 0.35, 0.7] }).observe(canvas);
+}
