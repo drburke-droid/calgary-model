@@ -454,7 +454,14 @@ const cvcEraAt = (y) => { let k = 0; for (let i = 0; i < CVC_ERAS.length; i++) i
   document.head.appendChild(st); }
 let cvcEraI = -1;
 function cvcCard(k) { const e = CVC_ERAS[k]; $('cardT').textContent = e[3]; $('cardS').textContent = e[4]; }
+// the clinic pin sits on whatever stands on the block that year: just above the lots and the low mill buildings,
+// then rides up with Gulf Canada Square as it rises (from 1978.7) to settle on its roof
+function cvcPinY(y) {
+  const lo = y >= 1910 && y < 1977.5 ? 0.035 : 0.012, r = Math.min(1, Math.max(0, (y - 1978.7) / 0.9)), e = 1 - Math.pow(1 - r, 3);
+  return CVC.ground + lo + (CVC.top + 0.012 - lo) * e;
+}
 function updCvcEra(y) {
+  if (cvcI >= 0 && CVC) pins[cvcI].pos.y = cvcPinY(y);
   if (cvcI < 0) return; const k = cvcEraAt(y); if (k === cvcEraI) return; cvcEraI = k;
   const e = CVC_ERAS[k], p = pins[cvcI]; p.el.innerHTML = `<i></i><b>${e[1]}<small>${e[2]}</small></b>`;
   p.el.classList.toggle('past', k < CVC_ERAS.length - 1); p.w = Math.max(e[1].length * 8.8, e[2].length * 6.4) + 24;
