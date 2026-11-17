@@ -1,7 +1,7 @@
 Calgary - a working model of a city (1900-2026)
 ================================================
 
-An interactive 3D toy model of Calgary, sitting on a wooden table (opens on a 3/4 view of the whole table). Drag the year slider (or press play) to watch the city grow;
+An interactive 3D toy model of Calgary. Drag the year slider (or press play) to watch the city grow;
 drag to pan, scroll or pinch to zoom, right-drag or two-finger twist to tilt and turn. The Tour list
 flies to each landmark at the right year.
 
@@ -37,7 +37,5 @@ Address options
   ?find      opens in 2026 and flies straight to Calgary Vision Centre with its card (and a Get directions link) open
   ?year=1950 starts the model in that year (1900-2026)
   ?simple    turns off the film-style effects
-  ?bg=f7f5f0 background colour behind the table (hex, default white ffffff) - match it to your page
-  ?notable   the older look: the model floating on a coloured backdrop, no table
 e.g. <iframe src="https://drburke-droid.github.io/calgary-model/?find" ...>
 The data files may sit in data/ (as shipped) or loose next to app.js; the app finds them either way.
