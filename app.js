@@ -61,14 +61,18 @@ function hAt(X, Y) {   // terrain height (m) under map point, bilinear on the 48
 const canvas = $('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, lowPower ? 1.5 : 2));
-const POST = renderer.capabilities.isWebGL2 && !/[?&]simple\b/.test(location.search);   // WebGL2: post-processed miniature look; else plain ACES
+const POST = renderer.capabilities.isWebGL2 && !/[?&]simple\b/.test(location.search);
+// the model on a wooden table, seen against a plain background (white unless ?bg=rrggbb); ?notable gives the old floating model
+const TABLE = !/[?&]notable\b/.test(location.search);
+const BGC = TABLE ? '#' + ((/[?&]bg=([0-9a-fA-F]{6})\b/.exec(location.search) || [0, 'ffffff'])[1]) : null;
+if (BGC) document.documentElement.style.setProperty('--bg', BGC);   // WebGL2: post-processed miniature look; else plain ACES
 renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = POST ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 renderer.shadowMap.enabled = !lowPower; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(40, 1, 0.005, 600);
 const controls = new MapControls(camera, canvas);
 controls.enableDamping = true; controls.dampingFactor = 0.09; controls.zoomToCursor = true; controls.screenSpacePanning = false;
-controls.minDistance = 0.12; controls.maxDistance = 75; controls.maxPolarAngle = THREE.MathUtils.degToRad(82);
+controls.minDistance = 0.12; controls.maxDistance = TABLE ? 320 : 75; controls.maxPolarAngle = THREE.MathUtils.degToRad(82);
 const U = { uYear: { value: 1900 }, uGlow: { value: 0 }, uGlowStart: { value: 1900 }, uFar: { value: 0 }, uRad: { value: 1e9 }, uCen: { value: new THREE.Vector2() }, uTime: { value: 0 } };
 
 // lights: warm low sun from the west-north-west (as in the film), cool sky fill
@@ -156,6 +160,49 @@ function patch(mat, { vert = {}, frag = {}, uniforms = {} }) {   // inject code 
   const W = M.TW / 1000, H = M.TH / 1000;
   const plinth = new THREE.Mesh(new THREE.BoxGeometry(W + 0.9, 0.9, H + 0.9), new THREE.MeshStandardMaterial({ color: 0x5e341a, roughness: 0.35, metalness: 0.05 }));
   plinth.position.set(0, yb - 0.45, 0); plinth.receiveShadow = true; scene.add(plinth);
+  if (TABLE) addTable(yb - 0.9, W, H);
+}
+// ---------------------------------------------------------------- the table (top, apron, tapered legs) and a soft shadow on an unseen floor
+function woodTexture(w, h, base, k) {   // procedural plank grain running along the texture's u axis
+  const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); const im = g.createImageData(w, h); const d = im.data;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const ph = y * k + 1.6 * Math.sin(x * 0.0045 + y * 0.011) + 0.6 * Math.sin(x * 0.017 + y * 0.04);
+    const ring = Math.pow(0.5 + 0.5 * Math.sin(ph), 5); const fine = (Math.sin(x * 0.9 + y * 7.3) * Math.sin(y * 3.1 + x * 0.07)) * 0.025;
+    const f = 0.93 - 0.12 * ring + fine + ((Math.floor(y / (h / 6)) % 2) ? 0.02 : -0.012);
+    const i = (y * w + x) * 4; d[i] = base[0] * f; d[i + 1] = base[1] * f; d[i + 2] = base[2] * f; d[i + 3] = 255;
+  }
+  g.putImageData(im, 0, 0); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = renderer.capabilities.getMaxAnisotropy(); return t;
+}
+function addTable(yTop, W, H) {
+  const TW_ = W + 10, TD_ = H + 10, TT = 1.5, LEG = 25, AP = 3.2, IN = 2.2;
+  const base = [150, 112, 80];   // a quiet oak (the film's colour grade warms it further)
+  const topMat = new THREE.MeshStandardMaterial({ map: woodTexture(1024, 512, base, 0.42), roughness: 0.5, metalness: 0.0 });
+  const sideMat = new THREE.MeshStandardMaterial({ map: woodTexture(512, 128, base, 0.5), roughness: 0.55, metalness: 0.0 });
+  const legMat = new THREE.MeshStandardMaterial({ map: woodTexture(128, 512, base.map((v) => v * 0.95), 0.0), roughness: 0.55, metalness: 0.0 });
+  const top = new THREE.Mesh(new THREE.BoxGeometry(TW_, TT, TD_), [sideMat, sideMat, topMat, topMat, sideMat, sideMat]); top.position.set(0, yTop - TT / 2, 0); scene.add(top);
+  for (const [x, z, w, d] of [[0, TD_ / 2 - IN, TW_ - 2 * IN, 0.9], [0, -(TD_ / 2 - IN), TW_ - 2 * IN, 0.9], [TW_ / 2 - IN, 0, 0.9, TD_ - 2 * IN], [-(TW_ / 2 - IN), 0, 0.9, TD_ - 2 * IN]]) {
+    const ap = new THREE.Mesh(new THREE.BoxGeometry(w, AP, d), sideMat); ap.position.set(x, yTop - TT - AP / 2, z); scene.add(ap);
+  }
+  let lg = new THREE.CylinderGeometry(1.75, 1.15, LEG, 4, 1); lg.rotateY(Math.PI / 4); lg = lg.toNonIndexed(); lg.computeVertexNormals();
+  const legs = [];
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const x = sx * (TW_ / 2 - IN - 0.4), z = sz * (TD_ / 2 - IN - 0.4); legs.push([x, z]);
+    const l = new THREE.Mesh(lg, legMat); l.position.set(x, yTop - TT - LEG / 2, z); scene.add(l);
+  }
+  // soft shadow on the (invisible) floor: a wide penumbra under the top plus a contact spot at each foot
+  const yF = yTop - TT - LEG, PW = TW_ + 34, PD = TD_ + 34, n = 256, m = Math.round(n * PD / PW);
+  const c = document.createElement('canvas'); c.width = n; c.height = m; const g = c.getContext('2d'); const im = g.createImageData(n, m); const dd = im.data;
+  const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  for (let j = 0; j < m; j++) for (let i = 0; i < n; i++) {
+    const x = ((i + 0.5) / n - 0.5) * PW, z = ((j + 0.5) / m - 0.5) * PD;
+    const ox = Math.abs(x) - TW_ / 2, oz = Math.abs(z) - TD_ / 2; const sd = Math.hypot(Math.max(ox, 0), Math.max(oz, 0)) + Math.min(Math.max(ox, oz), 0);
+    let a = 0.13 * sm(13, -10, sd);
+    for (const [lx, lz] of legs) a += 0.42 * Math.exp(-((x - lx) ** 2 + (z - lz) ** 2) / 5.0) + 0.1 * Math.exp(-((x - lx) ** 2 + (z - lz) ** 2) / 30.0);
+    const k = (j * n + i) * 4; dd[k] = 38; dd[k + 1] = 34; dd[k + 2] = 30; dd[k + 3] = Math.min(255, a * 255);
+  }
+  g.putImageData(im, 0, 0); const st = new THREE.CanvasTexture(c); st.colorSpace = THREE.SRGBColorSpace;
+  const sh = new THREE.Mesh(new THREE.PlaneGeometry(PW, PD), new THREE.MeshBasicMaterial({ map: st, transparent: true, depthWrite: false, toneMapped: false }));
+  sh.rotation.x = -Math.PI / 2; sh.position.set(0, yF + 0.02, 0); sh.renderOrder = -1; scene.add(sh);
 }
 
 // ---------------------------------------------------------------- shared instancing helpers
@@ -610,7 +657,9 @@ function goStop(i, dur = 2.0, keepYear = false) {
   for (const p of pins) { p.chip.removeAttribute('aria-current'); p.sel = false; } pins[i].chip.setAttribute('aria-current', 'true'); pins[i].sel = true;
   if (innerWidth < 1200) { $('tour').classList.remove('open'); $('tourBtn').setAttribute('aria-pressed', 'false'); }
 }
-const HOME = { tx: 0.85, ty: 0.3, tz: -3.4, d: 46, el: THREE.MathUtils.degToRad(48), az: THREE.MathUtils.degToRad(200) };
+// table view: step back on tall (phone) screens so the whole table still fits across
+const HOME = TABLE ? { tx: 0, ty: -15.5, tz: 1.5, d: 140 * Math.min(1.85, Math.max(1, 1.55 / (innerWidth / Math.max(1, innerHeight)))), el: THREE.MathUtils.degToRad(26), az: THREE.MathUtils.degToRad(213) }
+  : { tx: 0.85, ty: 0.3, tz: -3.4, d: 46, el: THREE.MathUtils.degToRad(48), az: THREE.MathUtils.degToRad(200) };
 $('home').addEventListener('click', () => flyTo(HOME, 1.6));
 if (cvcI >= 0) $('cvcLink').addEventListener('click', () => goStop(cvcI)); else $('cvcLink').style.display = 'none';
 $('north').addEventListener('click', () => { const s = camState(); flyTo({ ...s, az: Math.PI }, 0.9); });
@@ -624,7 +673,7 @@ addEventListener('keydown', (e) => {
 ['pointerdown', 'wheel'].forEach((ev) => canvas.addEventListener(ev, () => { flight = null; $('hint').style.opacity = '0'; }, { passive: true }));
 
 // ---------------------------------------------------------------- theme-aware background
-function applyTheme() { const c = getComputedStyle(document.documentElement).getPropertyValue('--scene').trim() || '#15191e'; scene.background = new THREE.Color(c); dirty = true; }
+function applyTheme() { const c = BGC || getComputedStyle(document.documentElement).getPropertyValue('--scene').trim() || '#15191e'; scene.background = new THREE.Color(c); dirty = true; }
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 
 // ---------------------------------------------------------------- frame loop
@@ -691,7 +740,7 @@ class MiniaturePass extends Pass {
         float l = dot(col, vec3(0.2126, 0.7152, 0.0722)); col = max(mix(vec3(l), col, uSat), 0.0);
         col = agx(col);
         vec2 q = (vUv - 0.5) * vec2(uAspect, 1.0); col *= mix(1.0, smoothstep(1.15, 0.25, length(q)), uVig);
-        if (d > 0.99999) col = uBg;
+        if (d > 0.99999) col = texture2D(tColor, vUv).rgb;   // background (and the floor shadow drawn over it): no grade
         gl_FragColor = vec4(col + (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0, 1.0);
         #include <colorspace_fragment>
       }`, { tColor: { value: null }, tBlur: { value: null }, uBg: { value: new THREE.Color() }, uExpo: { value: 0.48 }, uCon: { value: 1.5 }, uSat: { value: 1.35 }, uVig: { value: 0.35 }, uAspect: { value: 1 } });
@@ -748,13 +797,13 @@ const START = stops[0].cam;
 // open on the whole model, then glide down into the 1900 town (like the film's table-top opening)
 const START_VIEW = { tx: 1.25, ty: START.ty, tz: -4.45, d: 2.6, el: THREE.MathUtils.degToRad(36), az: THREE.MathUtils.degToRad(205) };
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-applyCam(reduceMotion ? START_VIEW : { ...HOME, d: 62, el: THREE.MathUtils.degToRad(40), az: THREE.MathUtils.degToRad(212) });
+applyCam(TABLE ? HOME : reduceMotion ? START_VIEW : { ...HOME, d: 62, el: THREE.MathUtils.degToRad(40), az: THREE.MathUtils.degToRad(212) });
 // address options for embedding: ?find (or ?clinic) opens in 2026 and flies down to Calgary Vision Centre with its card open;
 // ?year=1950 starts in that year
 const QP = new URLSearchParams(location.search); const FIND = (QP.has('find') || QP.has('clinic')) && cvcI >= 0; const QY = parseFloat(QP.get('year'));
 controls.update(); applyTheme(); resize(); setYear(FIND ? 2026 : QY >= 1900 && QY <= 2026 ? QY : Y0);
 if (FIND) setTimeout(() => { if (!flight) goStop(cvcI, reduceMotion ? 0.01 : 4.2); }, reduceMotion ? 0 : 900);
-else if (!reduceMotion) setTimeout(() => { if (!flight) flyTo(START_VIEW, 3.4); }, 1300);
+else if (!reduceMotion && !TABLE) setTimeout(() => { if (!flight) flyTo(START_VIEW, 3.4); }, 1300);   // the table view stays put
 let last = performance.now(), labelTick = 0;
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
