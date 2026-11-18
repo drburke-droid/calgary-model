@@ -426,11 +426,11 @@ const pins = stops.map((s, i) => {
   const b = document.createElement('button'); b.className = 'chip' + (isC ? ' cvc' : ''); b.innerHTML = `<span class="y">${isC ? 1998 : Math.floor(s.year)}</span><span class="t">${s.title.replace(/ · \d{4}.*$/, '')}</span>`;
   b.addEventListener('click', () => goStop(i)); stopsEl.appendChild(b);
   const p = document.createElement('div'); p.className = 'pin' + (isC ? ' cvc' : '');
-  p.innerHTML = isC ? '<i></i><b>Calgary Vision Centre<small>At the centre of the city since 1998</small></b>' : `<i></i><b>${s.title.replace(/ · .*$/, '')}</b>`; p.style.display = 'none';
+  p.innerHTML = isC ? '<i></i>' : `<i></i><b>${s.title.replace(/ · .*$/, '')}</b>`; p.style.display = 'none';   // the clinic: just its logo
   p.addEventListener('click', () => (isC ? goStop(i, 2.0, year < 1998) : goStop(i))); pinsEl.appendChild(p);
   const ay = isC && CVC ? CVC.ground + CVC.top + 0.012 : s.ground + (s.ah * 1.0) / 1000;
   const pos = isC && CVC ? new THREE.Vector3(CVC.anchor[0], ay, CVC.anchor[1]) : new THREE.Vector3(s.anchor[0], ay, s.anchor[1]);
-  return { el: p, chip: b, pos, y0: isC ? 0 : builtYear(s), y1: UNTIL[s.key] || 1e4, w: isC ? 236 : s.title.replace(/ · .*$/, '').length * 7.4, sel: false, cvc: isC };
+  return { el: p, chip: b, pos, y0: isC ? 0 : builtYear(s), y1: UNTIL[s.key] || 1e4, w: isC ? 0 : s.title.replace(/ · .*$/, '').length * 7.4, sel: false, cvc: isC };
 });
 const cvcI = pins.findIndex((p) => p.cvc);
 // the clinic's block (9th Avenue & 4th Street SW) through time: the pin and its card say what stood here in each era
@@ -450,7 +450,7 @@ const CVC_ERAS = [
 ];
 const cvcEraAt = (y) => { let k = 0; for (let i = 0; i < CVC_ERAS.length; i++) if (y >= CVC_ERAS[i][0]) k = i; return k; };
 { const st = document.createElement('style');   // before 1998 the clinic pin is a hollow, dashed 'future home' marker
-  st.textContent = '.pin.cvc.past i { background: var(--panel-solid); border: 4px solid var(--cvc); box-shadow: 0 2px 6px rgba(0,0,0,0.45); animation: none; } .pin.cvc.past b { border-style: dashed; } #card .t { padding-right: 30px; }';
+  st.textContent = '#card .t { padding-right: 24px; }';
   document.head.appendChild(st); }
 let cvcEraI = -1;
 function cvcCard(k) { const e = CVC_ERAS[k]; $('cardT').textContent = e[3]; $('cardS').textContent = e[4]; }
@@ -463,8 +463,8 @@ function cvcPinY(y) {
 function updCvcEra(y) {
   if (cvcI >= 0 && CVC) pins[cvcI].pos.y = cvcPinY(y);
   if (cvcI < 0) return; const k = cvcEraAt(y); if (k === cvcEraI) return; cvcEraI = k;
-  const e = CVC_ERAS[k], p = pins[cvcI]; p.el.innerHTML = `<i></i><b>${e[1]}<small>${e[2]}</small></b>`;
-  p.el.classList.toggle('past', k < CVC_ERAS.length - 1); p.w = Math.max(e[1].length * 8.8, e[2].length * 6.4) + 24;
+  const e = CVC_ERAS[k], p = pins[cvcI]; p.el.title = e[1] === e[2] ? e[1] : `${e[1]} \u00b7 ${e[2]}`; p.el.setAttribute('aria-label', p.el.title);   // the era's text lives in the tooltip and the card
+  p.el.classList.toggle('past', k < CVC_ERAS.length - 1);
   if (pins[cvcI].sel && $('card').style.display === 'block' && !(typeof flight !== 'undefined' && flight && flight.y1 != null)) cvcCard(k);
 }
 
@@ -503,15 +503,10 @@ function updateLabels(W, H) {
   }
   pv.sort((a, b) => a[0] - b[0]);
   for (const [, p, x, y] of pv) {
-    const bx = p.cvc ? [x - 12, y - 22, x + 22 + p.w, y + 22] : [x - 9, y - 11, x + 16 + p.w, y + 11]; if (!p.cvc && (bx[2] > W - 8 || bx[0] < 8)) continue;
+    const bx = p.cvc ? [x - 19, y - 19, x + 19, y + 19] : [x - 9, y - 11, x + 16 + p.w, y + 11]; if (!p.cvc && (bx[2] > W - 8 || bx[0] < 8)) continue;
     if (boxes.some((b) => !(bx[2] < b[0] || b[2] < bx[0] || bx[3] < b[1] || b[3] < bx[1]))) continue;
     boxes.push(bx); p.el.style.display = 'flex';
-    if (p.cvc) {   // label right of the pin, else left, else centred below it (narrow phones)
-      const el = p.el; el.classList.remove('left', 'below'); const w = el.offsetWidth;
-      if (x - 10 + w <= W - 6) el.style.transform = `translate(${x - 10}px, ${y - 10}px)`;
-      else if (x + 10 - w >= 6) { el.classList.add('left'); el.style.transform = `translate(${x + 10 - w}px, ${y - 10}px)`; }
-      else { el.classList.add('below'); const wb = el.offsetWidth; el.style.transform = `translate(${Math.min(W - 6 - wb, Math.max(6, x - wb / 2))}px, ${y - 10}px)`; }
-    }
+    if (p.cvc) { const r = p.el.offsetWidth / 2; p.el.style.transform = `translate(${x - r}px, ${y - r}px)`; }   // logo badge centred on the clinic
     else p.el.style.transform = `translate(${x - 7}px, ${y - 7}px)`;
   }
   for (const [, i, x, y] of cands) {
@@ -584,7 +579,7 @@ function dirLink(show) {
   if (!dirA) {
     dirA = document.createElement('a'); dirA.target = '_blank'; dirA.rel = 'noopener'; dirA.textContent = 'Get directions \u2197';
     dirA.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent('Calgary Vision Centre, 401 9 Ave SW, Calgary, AB');
-    dirA.style.cssText = 'display:inline-block;margin-top:10px;font-weight:700;font-size:14px;color:var(--cvc-ink);text-decoration:none;border-bottom:1.5px solid currentColor';
+    dirA.style.cssText = 'display:inline-block;margin-top:7px;font-weight:700;font-size:12.5px;color:var(--cvc-ink);text-decoration:none;border-bottom:1.5px solid currentColor';
     $('card').appendChild(dirA);
   }
   dirA.style.display = show ? 'inline-block' : 'none';
@@ -593,7 +588,7 @@ let todayA = null;   // 'See it today' link on the clinic card when it was opene
 function todayLink(show) {
   if (!todayA) {
     todayA = document.createElement('button'); todayA.type = 'button'; todayA.textContent = 'See it today \u2192';
-    todayA.style.cssText = 'display:inline-block;margin:10px 0 0 16px;padding:0;background:none;border:0;border-bottom:1.5px solid currentColor;font:inherit;font-weight:700;font-size:14px;color:var(--cvc-ink);cursor:pointer';
+    todayA.style.cssText = 'display:inline-block;margin:7px 0 0 14px;padding:0;background:none;border:0;border-bottom:1.5px solid currentColor;font:inherit;font-weight:700;font-size:12.5px;color:var(--cvc-ink);cursor:pointer';
     todayA.addEventListener('click', () => goStop(cvcI)); $('card').appendChild(todayA);
   }
   todayA.style.display = show ? 'inline-block' : 'none';
