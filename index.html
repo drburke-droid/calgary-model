@@ -107,7 +107,20 @@ input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 
 #about a { color: var(--accent); }
 #about .x { position: absolute; right: 8px; top: 8px; width: 30px; height: 30px; box-shadow: none; border: 0; background: transparent; }
 #credits a { color: inherit; }
-#hint { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); padding: 8px 14px; font-size: 13px; color: var(--ink-2); transition: opacity 0.8s; pointer-events: none; }
+#hint { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); padding: 7px 14px; font-size: 13px; color: var(--ink-2); transition: opacity 0.8s; pointer-events: none; white-space: nowrap; }
+#help { position: absolute; right: calc(68px + env(safe-area-inset-right, 0px)); top: calc(16px + env(safe-area-inset-top, 0px)); width: min(280px, calc(100% - 100px)); padding: 11px 14px 12px; display: none; z-index: 3; font-size: 13px; color: var(--ink-2); }
+#help h3 { margin: 0 26px 8px 0; font-size: 14px; color: var(--ink); }
+#help .x { position: absolute; right: 4px; top: 4px; width: 28px; height: 28px; box-shadow: none; border: 0; background: transparent; }
+#help .x svg { width: 16px; height: 16px; }
+.hrow { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: center; margin: 6px 0; line-height: 1.3; }
+.hrow b { color: var(--ink); font-weight: 800; }
+.ms { width: 18px; height: 24px; justify-self: center; color: var(--ink-2); }
+kbd { font: 700 10px/1 'Overpass Mono', monospace; padding: 3px 4px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; color: var(--ink); justify-self: center; }
+#help .hnote { margin: 9px 0 0; padding-top: 8px; border-top: 1px solid var(--line); font-size: 11.5px; line-height: 1.4; color: var(--ink-3); }
+body.touch .hrow.mouse, body:not(.touch) .hrow.touch, body.touch #hint .mouse-h, body:not(.touch) #hint .touch-h { display: none; }
+#hint .ms { width: 13px; height: 18px; vertical-align: -4px; margin-right: 3px; }
+#hint i { font-style: normal; color: var(--ink-3); margin: 0 7px; }
+
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 @media (prefers-reduced-motion: reduce) { #loading, .sl, #hint { transition: none !important; } .pin.cvc i { animation: none; } }
 @media (max-width: 720px) {
@@ -128,7 +141,8 @@ input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 
   #card { right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(104px + env(safe-area-inset-bottom, 0px)); width: calc(100% - 32px); }
   #credits { right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(92px + env(safe-area-inset-bottom, 0px)); font-size: 9.5px; }
   #about { right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(104px + env(safe-area-inset-bottom, 0px)); width: calc(100% - 32px); }
-  #hint { display: none; }
+  #hint { top: auto; bottom: calc(104px + env(safe-area-inset-bottom, 0px)); font-size: 12px; }
+  #help { right: calc(66px + env(safe-area-inset-right, 0px)); top: calc(12px + env(safe-area-inset-top, 0px)); width: calc(100% - 96px); }
   .ticks span:not(.end) { font-size: 0; }
 }
 </style>
@@ -136,7 +150,7 @@ input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 
 </head>
 <body>
 <div id="app">
-  <canvas id="gl" tabindex="0" aria-label="3D model of Calgary. Drag to pan, scroll or pinch to zoom, right-drag or two-finger twist to rotate."></canvas>
+  <canvas id="gl" tabindex="0" aria-label="3D model of Calgary. Drag to move, scroll or pinch to zoom, right-drag or two-finger drag to turn and tilt."></canvas>
   <div id="labels" aria-hidden="true"></div>
   <div id="hud" class="panel" aria-live="polite">
     <div class="kicker">Calgary · Alberta</div>
@@ -152,6 +166,7 @@ input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 
     <button class="btn" id="north" title="Face north" aria-label="Rotate to face north"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l5 16-5-4-5 4z"/></svg></button>
     <button class="btn" id="lbl" title="Street names" aria-label="Show street names" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h10M4 17h13"/></svg></button>
     <button class="btn" id="tourBtn" title="Tour stops" aria-label="Show tour stops" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2"/></svg></button>
+    <button class="btn" id="helpBtn" title="How to move around" aria-label="How to move around" aria-pressed="false" aria-controls="help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.6"/><circle cx="12" cy="17" r="0.4" fill="currentColor"/></svg></button>
   </div>
   <nav id="tour" class="panel" aria-label="Tour stops"><h2>Tour</h2><div id="stops"></div></nav>
   <div id="card" class="panel" role="dialog" aria-label="Tour stop"><button class="btn x" id="cardX" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button><div class="t" id="cardT"></div><div class="s" id="cardS"></div></div>
@@ -169,7 +184,17 @@ input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 
     </div>
     <button class="btn" id="speed" title="Playback speed" aria-label="Playback speed">1×</button>
   </div>
-  <div id="hint" class="panel">Drag to pan · scroll to zoom · right-drag to tilt and turn</div>
+  <div id="help" class="panel" role="dialog" aria-label="How to move around"><button class="btn x" id="helpX" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <h3>Getting around</h3>
+    <div class="hrow mouse"><svg class="ms" viewBox="0 0 16 22" aria-hidden="true"><rect x="1" y="1" width="14" height="20" rx="7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M1.8 9h12.4M8 1.8V9" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.8A6.2 6.2 0 0 0 1.8 8v1H8z" fill="var(--accent)"/></svg><span><b>Left-drag</b> to move across the city</span></div>
+    <div class="hrow mouse"><svg class="ms" viewBox="0 0 16 22" aria-hidden="true"><rect x="1" y="1" width="14" height="20" rx="7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M1.8 9h12.4M8 1.8V9" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.8A6.2 6.2 0 0 1 14.2 8v1H8z" fill="var(--accent)"/></svg><span><b>Right-drag</b> to turn and tilt the view</span></div>
+    <div class="hrow mouse"><svg class="ms" viewBox="0 0 16 22" aria-hidden="true"><rect x="1" y="1" width="14" height="20" rx="7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M1.8 9h12.4M8 1.8V9" stroke="currentColor" stroke-width="1.3"/><rect x="6.6" y="3" width="2.8" height="5" rx="1.4" fill="var(--accent)"/></svg><span><b>Scroll wheel</b> to zoom in and out</span></div>
+    <div class="hrow mouse"><kbd>Shift</kbd><span><b>Shift + drag</b> also turns and tilts (handy on a trackpad)</span></div>
+    <div class="hrow touch"><svg class="ms" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="4.2" fill="var(--accent)"/><path d="M11 2v3M11 17v3M2 11h3M17 11h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span><b>One finger</b> drag to move across the city</span></div>
+    <div class="hrow touch"><svg class="ms" viewBox="0 0 22 22" aria-hidden="true"><circle cx="7" cy="15" r="3.4" fill="var(--accent)"/><circle cx="15" cy="7" r="3.4" fill="var(--accent)"/><path d="M3 19l-1.5 1.5M19 3l1.5-1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span><b>Pinch</b> with two fingers to zoom</span></div>
+    <div class="hrow touch"><svg class="ms" viewBox="0 0 22 22" aria-hidden="true"><circle cx="7" cy="11" r="3.4" fill="var(--accent)"/><circle cx="15" cy="11" r="3.4" fill="var(--accent)"/><path d="M5 4.5h12M15 2.5l2 2-2 2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>Two fingers</b> drag together to turn and tilt</span></div>
+    <p class="hnote">The buttons on the right zoom, show the whole city, face north, switch street names and open the tour. Press play, or drag the year slider, to watch the city grow.</p></div>
+  <div id="hint" class="panel"><span class="hrow-inline mouse-h"><svg class="ms" viewBox="0 0 16 22" aria-hidden="true"><rect x="1" y="1" width="14" height="20" rx="7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M1.8 9h12.4M8 1.8V9" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.8A6.2 6.2 0 0 0 1.8 8v1H8z" fill="var(--accent)"/></svg>drag to move<i>·</i><svg class="ms" viewBox="0 0 16 22" aria-hidden="true"><rect x="1" y="1" width="14" height="20" rx="7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M1.8 9h12.4M8 1.8V9" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.8A6.2 6.2 0 0 1 14.2 8v1H8z" fill="var(--accent)"/></svg>right-drag to turn and tilt<i>·</i><svg class="ms" viewBox="0 0 16 22" aria-hidden="true"><rect x="1" y="1" width="14" height="20" rx="7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M1.8 9h12.4M8 1.8V9" stroke="currentColor" stroke-width="1.3"/><rect x="6.6" y="3" width="2.8" height="5" rx="1.4" fill="var(--accent)"/></svg>scroll to zoom</span><span class="touch-h">One finger to move<i>·</i>two fingers to zoom, turn and tilt</span></div>
   <div id="loading"><div class="box"><h1>Calgary</h1><p>A working model of a city, 1900–2026</p><p class="by">Presented by <b>Calgary Vision Centre</b>, at the centre of the city since 1998</p><div class="bar"><div id="lbar"></div></div><div class="msg" id="lmsg">Loading…</div></div></div>
 </div>
 <script type="importmap">

@@ -617,6 +617,13 @@ addEventListener('keydown', (e) => {
   else if (e.key === '+' || e.key === '=') zoomBy(0.7); else if (e.key === '-') zoomBy(1.4);
 });
 ['pointerdown', 'wheel'].forEach((ev) => canvas.addEventListener(ev, () => { flight = null; $('hint').style.opacity = '0'; }, { passive: true }));
+// 'Getting around' card: mouse buttons (or touch gestures on phones and tablets) for moving, turning and zooming
+const TOUCH = matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches; document.body.classList.toggle('touch', TOUCH);
+function showHelp(on) { $('help').style.display = on ? 'block' : 'none'; $('helpBtn').setAttribute('aria-pressed', on ? 'true' : 'false'); if (on) $('about').style.display = 'none'; }
+$('helpBtn').addEventListener('click', () => showHelp($('help').style.display !== 'block'));
+$('helpX').addEventListener('click', () => showHelp(false));
+canvas.addEventListener('pointerdown', () => showHelp(false), { passive: true });
+addEventListener('keydown', (e) => { if (e.key === 'Escape') showHelp(false); else if (e.key === '?' && e.target.tagName !== 'INPUT') showHelp($('help').style.display !== 'block'); });
 
 // ---------------------------------------------------------------- theme-aware background
 function applyTheme() { const c = getComputedStyle(document.documentElement).getPropertyValue('--scene').trim() || '#15191e'; scene.background = new THREE.Color(c); dirty = true; }
@@ -786,5 +793,5 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 $('loading').style.opacity = '0'; setTimeout(() => $('loading').remove(), 700);
-setTimeout(() => ($('hint').style.opacity = '0'), 7000);
+setTimeout(() => ($('hint').style.opacity = '0'), 10000);
 window.__model = { stops, setYear, flyTo, goStop, camState, applyCam, controls, camera, renderer, scene, U, LOOK, gtao, mini, sun, redraw: () => (dirty = true) };
